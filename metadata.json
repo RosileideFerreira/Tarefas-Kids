@@ -1,0 +1,6 @@
+{
+  "name": "Tarefas Kids",
+  "description": "Gerenciador educativo de tarefas domésticas e recompensas infantis com acompanhamento de saldos e aprovação dos pais.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
