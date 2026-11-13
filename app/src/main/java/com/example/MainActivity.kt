@@ -73,8 +73,8 @@ fun MainApp(viewModel: TarefasViewModel, isDarkMode: Boolean) {
                 onToggleDarkMode = { viewModel.toggleDarkMode() },
                 onNavigate = { destination ->
                     if (destination == AppScreen.PARENT_PIN) {
-                        if (isParentLoggedIn) {
-                            viewModel.navigateTo(AppScreen.PARENT_DASHBOARD)
+                        if (!viewModel.isRegistered()) {
+                            viewModel.navigateTo(AppScreen.REGISTER)
                         } else {
                             showPinDialog = true
                         }
@@ -119,12 +119,10 @@ fun MainApp(viewModel: TarefasViewModel, isDarkMode: Boolean) {
         }
 
         AppScreen.PARENT_PIN -> {
-            if (isParentLoggedIn) {
-                LaunchedEffect(Unit) {
-                    viewModel.navigateTo(AppScreen.PARENT_DASHBOARD)
-                }
-            } else {
-                LaunchedEffect(Unit) {
+            LaunchedEffect(Unit) {
+                if (!viewModel.isRegistered()) {
+                    viewModel.navigateTo(AppScreen.REGISTER)
+                } else {
                     showPinDialog = true
                 }
             }
@@ -135,7 +133,11 @@ fun MainApp(viewModel: TarefasViewModel, isDarkMode: Boolean) {
                 onToggleDarkMode = { viewModel.toggleDarkMode() },
                 onNavigate = { destination ->
                     if (destination == AppScreen.PARENT_PIN) {
-                        showPinDialog = true
+                        if (!viewModel.isRegistered()) {
+                            viewModel.navigateTo(AppScreen.REGISTER)
+                        } else {
+                            showPinDialog = true
+                        }
                     } else {
                         viewModel.navigateTo(destination)
                     }
@@ -164,6 +166,7 @@ fun MainApp(viewModel: TarefasViewModel, isDarkMode: Boolean) {
                 },
                 onReviewCompletion = { id, approve -> viewModel.reviewCompletion(id, approve) },
                 onReviewRedemption = { id, approve -> viewModel.reviewRedemption(id, approve) },
+                onChangePin = { currentPin, newPin -> viewModel.changeParentPin(currentPin, newPin) },
                 onLogout = { viewModel.logoutParent() }
             )
         }
@@ -244,6 +247,10 @@ fun MainApp(viewModel: TarefasViewModel, isDarkMode: Boolean) {
             onPinSuccess = {
                 showPinDialog = false
                 viewModel.navigateTo(AppScreen.PARENT_DASHBOARD)
+            },
+            onUsePasswordLogin = {
+                showPinDialog = false
+                viewModel.navigateTo(AppScreen.PARENT_LOGIN)
             },
             onDismiss = {
                 showPinDialog = false

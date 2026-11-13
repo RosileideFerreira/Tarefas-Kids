@@ -65,7 +65,7 @@ class TarefasViewModel(application: Application) : AndroidViewModel(application)
     private val _selectedHistoryChildId = MutableStateFlow<Long?>(null)
     val selectedHistoryChildId: StateFlow<Long?> = _selectedHistoryChildId.asStateFlow()
 
-    private val _parentPin = MutableStateFlow(prefs.getString("pref_parent_pin", "1234") ?: "1234")
+    private val _parentPin = MutableStateFlow(prefs.getString("pref_parent_pin", "") ?: "")
     val parentPin: StateFlow<String> = _parentPin.asStateFlow()
 
     private val _isParentLoggedIn = MutableStateFlow(prefs.getBoolean("pref_is_logged_in", false))
@@ -78,6 +78,20 @@ class TarefasViewModel(application: Application) : AndroidViewModel(application)
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
 
     init {
+        val hasMigratedDefaultPin = prefs.getBoolean("pref_pin_migrated_2011", false)
+        if (!hasMigratedDefaultPin) {
+            val savedPin = prefs.getString("pref_parent_pin", "") ?: ""
+            if (savedPin == "1234" || (savedPin.isBlank() && isRegistered())) {
+                prefs.edit()
+                    .putString("pref_parent_pin", "2011")
+                    .putBoolean("pref_pin_migrated_2011", true)
+                    .apply()
+                _parentPin.value = "2011"
+            } else {
+                prefs.edit().putBoolean("pref_pin_migrated_2011", true).apply()
+            }
+        }
+
         val database = TarefasDatabase.getInstance(application)
         repository = TarefasRepository(database.tarefasDao())
 
@@ -175,7 +189,11 @@ class TarefasViewModel(application: Application) : AndroidViewModel(application)
                 emitToast("A senha precisa ter pelo menos 6 caracteres.")
                 return@launch
             }
-            val cleanPin = if (pin.length == 4) pin else "1234"
+            if (pin.length != 4 || !pin.all { it.isDigit() }) {
+                emitToast("O PIN precisa ter exatamente 4 dígitos numéricos.")
+                return@launch
+            }
+            val cleanPin = pin
 
             prefs.edit()
                 .putString("pref_parent_name", name.trim())
@@ -221,13 +239,46 @@ class TarefasViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun verifyParentPin(pin: String): Boolean {
+        if (!isRegistered() || _parentPin.value.length != 4) return false
+        if (pin.length != 4 || !pin.all { it.isDigit() }) return false
+        return pin == _parentPin.value
+    }
+
     fun loginWithPin(pin: String): Boolean {
+        if (!isRegistered() || _parentPin.value.length != 4) {
+            emitToast("Nenhum PIN cadastrado. Crie sua conta primeiro.")
+            return false
+        }
+        if (pin.length != 4 || !pin.all { it.isDigit() }) {
+            return false
+        }
         if (pin == _parentPin.value) {
             _isParentLoggedIn.value = true
             prefs.edit().putBoolean("pref_is_logged_in", true).apply()
+            viewModelScope.launch { repository.updateLoginState(true) }
             return true
         }
         return false
+    }
+
+    fun changeParentPin(currentPin: String, newPin: String): Boolean {
+        val savedPin = _parentPin.value
+        if (savedPin.length == 4 && currentPin != savedPin) {
+            emitToast("O PIN atual está incorreto.")
+            return false
+        }
+        if (newPin.length != 4 || !newPin.all { it.isDigit() }) {
+            emitToast("O novo PIN deve ter exatamente 4 dígitos numéricos.")
+            return false
+        }
+        prefs.edit()
+            .putString("pref_parent_pin", newPin)
+            .putBoolean("pref_pin_migrated_2011", true)
+            .apply()
+        _parentPin.value = newPin
+        emitToast("PIN atualizado com sucesso! 🔒")
+        return true
     }
 
     fun logoutParent() {

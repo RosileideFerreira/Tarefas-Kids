@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -72,6 +71,7 @@ fun ParentCalendarTabContent(
             contentAlignment = Alignment.Center
         ) {
             Column(
+                modifier = Modifier.widthIn(max = 440.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -79,7 +79,8 @@ fun ParentCalendarTabContent(
                 Text(
                     text = "Nenhuma criança cadastrada",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center
                 )
                 Text(
                     text = "Cadastre as crianças na aba Filhos para acompanhar o calendário semanal e mensal de atividades e saldos.",
@@ -100,12 +101,10 @@ fun ParentCalendarTabContent(
         children.find { it.id == selectedChildId } ?: children.first()
     }
 
-    // Mês e Ano selecionados no calendário
     var currentCalendarMonth by remember {
         mutableStateOf(Calendar.getInstance())
     }
 
-    // Cálculo das semanas e totais do mês selecionado
     val monthData = remember(selectedChild.id, currentCalendarMonth.timeInMillis, allCompletions, allTasks) {
         calculateMonthData(
             calendar = currentCalendarMonth,
@@ -115,219 +114,252 @@ fun ParentCalendarTabContent(
         )
     }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .testTag("parent_calendar_list"),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // 1. SELETOR DE CRIANÇAS
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Selecione o filho para ver o calendário:",
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(children, key = { it.id }) { child ->
-                        val isSelected = child.id == selectedChild.id
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { selectedChildId = child.id },
-                            leadingIcon = {
-                                Text(text = child.avatarEmoji, fontSize = 16.sp)
-                            },
-                            label = {
-                                Text(
-                                    text = child.name,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                )
-                            },
-                            modifier = Modifier.testTag("calendar_child_chip_${child.id}")
-                        )
-                    }
-                }
-            }
+    AdaptiveContainer(modifier = Modifier.fillMaxSize()) { adaptive ->
+        val weekColumns = adaptive.twoOrOneColumns
+        val weekRows = remember(monthData.weeks, weekColumns) {
+            monthData.weeks.chunked(weekColumns)
         }
 
-        // 2. NAVEGAÇÃO ENTRE MESES
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .widthIn(max = adaptive.contentMaxWidth)
+                    .testTag("parent_calendar_list"),
+                contentPadding = PaddingValues(horizontal = adaptive.horizontalPadding, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    IconButton(
-                        onClick = {
-                            val newCal = currentCalendarMonth.clone() as Calendar
-                            newCal.add(Calendar.MONTH, -1)
-                            currentCalendarMonth = newCal
-                        },
-                        modifier = Modifier.testTag("calendar_prev_month")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Mês Anterior"
-                        )
-                    }
-
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // 1. SELETOR DE CRIANÇAS
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            text = "${monthData.monthName} de ${monthData.year}",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Acompanhamento semanal e fechamento do mês",
-                            fontSize = 11.sp,
+                            text = "Selecione o filho para ver o calendário:",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    }
-
-                    IconButton(
-                        onClick = {
-                            val newCal = currentCalendarMonth.clone() as Calendar
-                            newCal.add(Calendar.MONTH, 1)
-                            currentCalendarMonth = newCal
-                        },
-                        modifier = Modifier.testTag("calendar_next_month")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Próximo Mês"
-                        )
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(children, key = { it.id }) { child ->
+                                val isSelected = child.id == selectedChild.id
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { selectedChildId = child.id },
+                                    leadingIcon = {
+                                        Text(text = child.avatarEmoji, fontSize = 16.sp)
+                                    },
+                                    label = {
+                                        Text(
+                                            text = child.name,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    modifier = Modifier.testTag("calendar_child_chip_${child.id}")
+                                )
+                            }
+                        }
                     }
                 }
-            }
-        }
 
-        // 3. CARD RESUMO MENSAL CONSOLIDADO (SOMA DE TODAS AS SEMANAS)
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("calendar_month_summary_card"),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(BotaoPrimarioAzul, Color(0xFF1E40AF))
-                            )
-                        )
-                        .padding(20.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // 2. NAVEGAÇÃO ENTRE MESES
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Text(text = selectedChild.avatarEmoji, fontSize = 20.sp)
-                                    Text(
-                                        text = "Saldo Total do Mês (${selectedChild.name})",
-                                        color = Color.White.copy(alpha = 0.9f),
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                                Text(
-                                    text = formatCentsToCurrency(monthData.totalEarningsCents),
-                                    color = Color.White,
-                                    fontSize = 32.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Text(
-                                    text = "Soma de todas as semanas de ${monthData.monthName}",
-                                    color = Color.White.copy(alpha = 0.85f),
-                                    fontSize = 11.sp
+                            IconButton(
+                                onClick = {
+                                    val newCal = currentCalendarMonth.clone() as Calendar
+                                    newCal.add(Calendar.MONTH, -1)
+                                    currentCalendarMonth = newCal
+                                },
+                                modifier = Modifier.testTag("calendar_prev_month")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Mês Anterior"
                                 )
                             }
 
-                            Box(
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(text = "💰", fontSize = 26.sp)
+                                Text(
+                                    text = "${monthData.monthName} de ${monthData.year}",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = "Acompanhamento semanal e fechamento do mês",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    val newCal = currentCalendarMonth.clone() as Calendar
+                                    newCal.add(Calendar.MONTH, 1)
+                                    currentCalendarMonth = newCal
+                                },
+                                modifier = Modifier.testTag("calendar_next_month")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = "Próximo Mês"
+                                )
                             }
                         }
+                    }
+                }
 
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.25f))
-
-                        // Linhas de soma por semana no resumo
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            monthData.weeks.forEach { week ->
+                // 3. CARD RESUMO MENSAL CONSOLIDADO
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("calendar_month_summary_card"),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(BotaoPrimarioAzul, Color(0xFF1E40AF))
+                                    )
+                                )
+                                .padding(20.dp)
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text(
-                                        text = "${week.label} (${week.rangeText})",
-                                        color = Color.White.copy(alpha = 0.85f),
-                                        fontSize = 11.sp
-                                    )
-                                    Text(
-                                        text = formatCentsToCurrency(week.weekEarningsCents),
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(end = 12.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(text = selectedChild.avatarEmoji, fontSize = 20.sp)
+                                            Text(
+                                                text = "Saldo Total do Mês (${selectedChild.name})",
+                                                color = Color.White.copy(alpha = 0.9f),
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                        Text(
+                                            text = formatCentsToCurrency(monthData.totalEarningsCents),
+                                            color = Color.White,
+                                            fontSize = 32.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                        Text(
+                                            text = "Soma de todas as semanas de ${monthData.monthName}",
+                                            color = Color.White.copy(alpha = 0.85f),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(52.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.15f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(text = "💰", fontSize = 26.sp)
+                                    }
+                                }
+
+                                HorizontalDivider(color = Color.White.copy(alpha = 0.25f))
+
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    monthData.weeks.forEach { week ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "${week.label} (${week.rangeText})",
+                                                color = Color.White.copy(alpha = 0.85f),
+                                                fontSize = 11.sp,
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .padding(end = 8.dp)
+                                            )
+                                            Text(
+                                                text = formatCentsToCurrency(week.weekEarningsCents),
+                                                color = Color.White,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
+
+                // 4. DETALHAMENTO DE CADA SEMANA
+                item {
+                    Text(
+                        text = "Detalhamento por Semana:",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                items(
+                    items = weekRows,
+                    key = { row -> row.joinToString("_") { it.weekNumber.toString() } }
+                ) { rowWeeks ->
+                    ResponsiveGridRow(
+                        items = rowWeeks,
+                        columns = weekColumns,
+                        horizontalSpacing = 14.dp
+                    ) { week ->
+                        WeekDetailCard(
+                            week = week,
+                            childName = selectedChild.name,
+                            onNavigateToManageTasks = onNavigateToManageTasks
+                        )
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
             }
-        }
-
-        // 4. DETALHAMENTO DE CADA SEMANA
-        item {
-            Text(
-                text = "Detalhamento por Semana:",
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-        }
-
-        items(monthData.weeks, key = { it.weekNumber }) { week ->
-            WeekDetailCard(
-                week = week,
-                childName = selectedChild.name,
-                onNavigateToManageTasks = onNavigateToManageTasks
-            )
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -359,6 +391,9 @@ private fun WeekDetailCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -406,6 +441,9 @@ private fun WeekDetailCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -461,7 +499,6 @@ private fun WeekDetailCard(
                         modifier = Modifier.padding(start = 22.dp)
                     )
                 } else {
-                    // Tarefas Aprovadas
                     week.approvedTasks.forEach { comp ->
                         val dateFormatted = SimpleDateFormat("dd/MM 'às' HH:mm", Locale("pt", "BR"))
                             .format(comp.completedAt)
@@ -477,7 +514,11 @@ private fun WeekDetailCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 8.dp)
+                                ) {
                                     Text(
                                         text = "✅ ${comp.taskTitle}",
                                         fontWeight = FontWeight.SemiBold,
@@ -499,7 +540,6 @@ private fun WeekDetailCard(
                         }
                     }
 
-                    // Tarefas que ainda estão aguardando aprovação
                     week.pendingTasks.forEach { comp ->
                         Surface(
                             shape = RoundedCornerShape(10.dp),
@@ -513,7 +553,11 @@ private fun WeekDetailCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 8.dp)
+                                ) {
                                     Text(
                                         text = "🕐 ${comp.taskTitle}",
                                         fontWeight = FontWeight.SemiBold,
@@ -571,7 +615,6 @@ private fun WeekDetailCard(
                         modifier = Modifier.padding(start = 22.dp)
                     )
                 } else {
-                    // Tarefas Recusadas pelos pais
                     week.rejectedTasks.forEach { comp ->
                         Surface(
                             shape = RoundedCornerShape(10.dp),
@@ -585,7 +628,11 @@ private fun WeekDetailCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 8.dp)
+                                ) {
                                     Text(
                                         text = "❌ ${comp.taskTitle}",
                                         fontWeight = FontWeight.SemiBold,
@@ -614,7 +661,6 @@ private fun WeekDetailCard(
                         }
                     }
 
-                    // Tarefas da rotina não feitas
                     week.uncompletedTasks.forEach { task ->
                         Surface(
                             shape = RoundedCornerShape(10.dp),
@@ -628,7 +674,11 @@ private fun WeekDetailCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 8.dp)
+                                ) {
                                     Text(
                                         text = "⚠️ ${task.title}",
                                         fontWeight = FontWeight.Medium,
@@ -656,9 +706,10 @@ private fun WeekDetailCard(
                 onClick = onNavigateToManageTasks,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .defaultMinSize(minHeight = 48.dp)
                     .testTag("add_task_week_${week.weekNumber}"),
                 shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
@@ -671,7 +722,8 @@ private fun WeekDetailCard(
                     text = "Cadastrar tarefa para a ${week.label}",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = BotaoPrimarioAzul
+                    color = BotaoPrimarioAzul,
+                    textAlign = TextAlign.Center
                 )
             }
         }
@@ -688,9 +740,6 @@ private fun isTaskForWeek(task: TaskItem, weekNumber: Int): Boolean {
     return task.effectiveWeek == weekNumber
 }
 
-/**
- * Divide o mês em semanas e calcula tarefas feitas, pendentes, recusadas, não feitas e saldos.
- */
 private fun calculateMonthData(
     calendar: Calendar,
     childId: Long,
@@ -711,12 +760,6 @@ private fun calculateMonthData(
     val year = cal.get(Calendar.YEAR)
     val now = System.currentTimeMillis()
 
-    // Intervalos das semanas do mês:
-    // Semana 1: 1 a 7
-    // Semana 2: 8 a 14
-    // Semana 3: 15 a 21
-    // Semana 4: 22 a 28
-    // Semana 5: 29 a maxDays (se houver)
     val weekIntervals = mutableListOf<Pair<Int, Int>>()
     weekIntervals.add(Pair(1, min(7, maxDaysInMonth)))
     if (maxDaysInMonth >= 8) weekIntervals.add(Pair(8, min(14, maxDaysInMonth)))
@@ -746,7 +789,6 @@ private fun calculateMonthData(
         val endMillis = endCal.timeInMillis
         val isCurrentWeek = now in startMillis..endMillis
 
-        // Completions da criança dentro do período desta semana
         val weekCompletions = allCompletions.filter {
             it.childId == childId && it.completedAt in startMillis..endMillis
         }
@@ -756,12 +798,10 @@ private fun calculateMonthData(
         val rejected = weekCompletions.filter { it.status == CompletionStatus.REJECTED }
         val weekEarningsCents = approved.sumOf { it.rewardCents }
 
-        // Tarefas que pertencem especificamente a ESTA semana
         val weekTasksForChild = applicableTasksForChild.filter { task ->
             isTaskForWeek(task, index + 1)
         }
 
-        // Tarefas que a criança deixou de fazer nesta semana (apenas as que pertenciam a esta semana e não foram feitas)
         val doneTaskIds = (approved.map { it.taskId } + pending.map { it.taskId }).toSet()
         val uncompleted = weekTasksForChild.filter { task ->
             task.id !in doneTaskIds

@@ -1,19 +1,19 @@
 package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,8 +22,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import com.example.model.Child
 import com.example.model.RoomCategory
 import com.example.model.TaskItem
@@ -52,6 +54,7 @@ fun ParentTasksScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
                 title = {
@@ -81,75 +84,101 @@ fun ParentTasksScreen(
             )
         }
     ) { innerPadding ->
-        Column(
+        AdaptiveContainer(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-        ) {
-            // Room Filter Chips
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) { adaptive ->
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter
             ) {
-                item {
-                    FilterChip(
-                        selected = selectedRoomFilter == null,
-                        onClick = { selectedRoomFilter = null },
-                        label = { Text("Todos (${tasks.size})") }
-                    )
-                }
-                items(RoomCategory.values()) { room ->
-                    FilterChip(
-                        selected = selectedRoomFilter == room,
-                        onClick = {
-                            selectedRoomFilter = if (selectedRoomFilter == room) null else room
-                        },
-                        label = { Text(room.labelWithEmoji) }
-                    )
-                }
-            }
-
-            if (filteredTasks.isEmpty()) {
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
+                        .widthIn(max = adaptive.contentMaxWidth)
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    // Room Filter Chips
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = adaptive.horizontalPadding, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(text = "🧹", fontSize = 48.sp)
-                        Text(
-                            text = "Nenhuma tarefa encontrada",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-                        Text(
-                            text = "Crie uma nova tarefa e escolha se ela é para todos ou para uma criança específica.",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        item {
+                            FilterChip(
+                                selected = selectedRoomFilter == null,
+                                onClick = { selectedRoomFilter = null },
+                                label = { Text("Todos (${tasks.size})") }
+                            )
+                        }
+                        items(RoomCategory.values()) { room ->
+                            FilterChip(
+                                selected = selectedRoomFilter == room,
+                                onClick = {
+                                    selectedRoomFilter = if (selectedRoomFilter == room) null else room
+                                },
+                                label = { Text(room.labelWithEmoji) }
+                            )
+                        }
                     }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(filteredTasks, key = { it.id }) { task ->
-                        TaskItemManageCard(
-                            task = task,
-                            onEdit = { taskToEdit = task },
-                            onDelete = { onDeleteTask(task.id) }
-                        )
-                    }
-                    item {
-                        Spacer(modifier = Modifier.height(72.dp))
+
+                    if (filteredTasks.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                modifier = Modifier.widthIn(max = 420.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(text = "🧹", fontSize = 48.sp)
+                                Text(
+                                    text = "Nenhuma tarefa encontrada",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = "Crie uma nova tarefa e escolha se ela é para todos ou para uma criança específica.",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    } else {
+                        val columns = adaptive.twoOrOneColumns
+                        val rows = remember(filteredTasks, columns) { filteredTasks.chunked(columns) }
+
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = adaptive.horizontalPadding, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(
+                                items = rows,
+                                key = { row -> row.joinToString("_") { it.id.toString() } }
+                            ) { rowTasks ->
+                                ResponsiveGridRow(
+                                    items = rowTasks,
+                                    columns = columns,
+                                    horizontalSpacing = 12.dp
+                                ) { task ->
+                                    TaskItemManageCard(
+                                        task = task,
+                                        onEdit = { taskToEdit = task },
+                                        onDelete = { onDeleteTask(task.id) }
+                                    )
+                                }
+                            }
+                            item {
+                                Spacer(modifier = Modifier.height(80.dp))
+                            }
+                        }
                     }
                 }
             }
@@ -188,6 +217,7 @@ fun ParentTasksScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TaskItemManageCard(
     task: TaskItem,
@@ -209,23 +239,31 @@ private fun TaskItemManageCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
+            ) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = task.roomCategory.emoji,
-                        fontSize = 18.sp
-                    )
-                    Text(
-                        text = task.room,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = LinkTextoClicavel
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = task.roomCategory.emoji,
+                            fontSize = 18.sp
+                        )
+                        Text(
+                            text = task.room,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = LinkTextoClicavel
+                        )
+                    }
 
-                    // Target child pill
                     val isForAll = task.assignedChildId == null || task.assignedChildId == 0L
                     Surface(
                         shape = RoundedCornerShape(8.dp),
@@ -240,7 +278,6 @@ private fun TaskItemManageCard(
                         )
                     }
 
-                    // Week badge
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = SucessoVerdeContainer
@@ -255,7 +292,7 @@ private fun TaskItemManageCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
                     text = task.title,
@@ -319,11 +356,9 @@ fun TaskFormDialog(
     }
     var description by remember { mutableStateOf(task?.description ?: "") }
 
-    // Target child selector (null means "Todas as crianças")
     var selectedChildId by remember { mutableStateOf(task?.assignedChildId) }
     var selectedChildName by remember { mutableStateOf(task?.assignedChildName ?: "Todas as crianças") }
 
-    // Target week selector
     var selectedWeek by remember {
         mutableStateOf(task?.targetWeek ?: task?.effectiveWeek ?: 1)
     }
@@ -334,6 +369,12 @@ fun TaskFormDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .widthIn(max = 520.dp)
+            .imePadding(),
         title = {
             Text(
                 text = if (task == null) "Nova Tarefa" else "Editar Tarefa",
@@ -342,7 +383,9 @@ fun TaskFormDialog(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedTextField(
@@ -356,7 +399,6 @@ fun TaskFormDialog(
                         .testTag("task_title_input")
                 )
 
-                // "Para quem é a tarefa?" Selector
                 ExposedDropdownMenuBox(
                     expanded = expandedChildDropdown,
                     onExpandedChange = { expandedChildDropdown = it }
@@ -397,7 +439,6 @@ fun TaskFormDialog(
                     }
                 }
 
-                // Room Selector
                 ExposedDropdownMenuBox(
                     expanded = expandedRoomDropdown,
                     onExpandedChange = { expandedRoomDropdown = it }
@@ -428,7 +469,6 @@ fun TaskFormDialog(
                     }
                 }
 
-                // Week of Calendar Selector
                 val weekOptions = listOf(
                     1 to "Semana 1 (dias 01 a 07)",
                     2 to "Semana 2 (dias 08 a 14)",
@@ -470,7 +510,6 @@ fun TaskFormDialog(
                     }
                 }
 
-                // Reward input
                 OutlinedTextField(
                     value = rewardText,
                     onValueChange = { rewardText = it },
@@ -515,7 +554,9 @@ fun TaskFormDialog(
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = BotaoPrimarioAzul),
-                modifier = Modifier.testTag("task_dialog_save_button")
+                modifier = Modifier
+                    .defaultMinSize(minHeight = 48.dp)
+                    .testTag("task_dialog_save_button")
             ) {
                 Text("Salvar")
             }
@@ -523,7 +564,8 @@ fun TaskFormDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
+                modifier = Modifier.defaultMinSize(minHeight = 48.dp)
             ) {
                 Text("Cancelar")
             }

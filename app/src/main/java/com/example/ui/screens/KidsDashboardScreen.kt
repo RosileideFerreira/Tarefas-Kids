@@ -7,9 +7,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -23,8 +25,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import com.example.model.*
 import com.example.ui.theme.*
 
@@ -36,7 +41,7 @@ enum class KidTaskStatusFilter(val label: String) {
     REJECTED("Recusadas ❌")
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun KidsDashboardScreen(
     child: Child,
@@ -55,18 +60,15 @@ fun KidsDashboardScreen(
     var selectedStatusFilter by remember { mutableStateOf(KidTaskStatusFilter.ALL) }
     var showRedeemDialog by remember { mutableStateOf(false) }
 
-    // Obter o registro de conclusão mais recente para cada tarefa desta criança
     val latestCompletionByTaskId = remember(completions) {
         completions.groupBy { it.taskId }
             .mapValues { (_, comps) -> comps.maxByOrNull { it.completedAt } }
     }
 
-    // Filtrar apenas tarefas atribuídas a esta criança ou a todas
     val childAssignedTasks = remember(tasks, child.id) {
         tasks.filter { it.isAssignedTo(child.id) }
     }
 
-    // Contadores para os filtros de status
     val todoCount = remember(childAssignedTasks, latestCompletionByTaskId) {
         childAssignedTasks.count { latestCompletionByTaskId[it.id] == null }
     }
@@ -80,7 +82,6 @@ fun KidsDashboardScreen(
         childAssignedTasks.count { latestCompletionByTaskId[it.id]?.status == CompletionStatus.REJECTED }
     }
 
-    // Tarefas filtradas por cômodo e por status selecionado
     val filteredTasks = remember(childAssignedTasks, selectedRoom, selectedStatusFilter, latestCompletionByTaskId) {
         childAssignedTasks.filter { task ->
             val matchesRoom = selectedRoom == null || task.room == selectedRoom?.displayName
@@ -99,6 +100,7 @@ fun KidsDashboardScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
                 title = {
@@ -110,7 +112,9 @@ fun KidsDashboardScreen(
                         Text(
                             text = "Tarefas de ${child.name}",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
+                            fontSize = 18.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 },
@@ -128,228 +132,302 @@ fun KidsDashboardScreen(
             )
         }
     ) { innerPadding ->
-        LazyColumn(
+        AdaptiveContainer(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Piggy Bank / Balance Card
-            item {
-                KidPiggyCard(
-                    balance = balance,
-                    onRedeemClick = { showRedeemDialog = true }
-                )
-            }
-
-            // Filtro por Status (Feitas, Pendentes, Recusadas, A Fazer)
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Filtrar por Status:",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
-                    )
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
+                .padding(innerPadding)
+        ) { adaptive ->
+            if (adaptive.isExpanded) {
+                // Two-pane layout for tablets / ChromeOS / large foldables
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .widthIn(max = 1200.dp)
+                            .padding(horizontal = adaptive.horizontalPadding, vertical = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
-                        item {
-                            FilterChip(
-                                selected = selectedStatusFilter == KidTaskStatusFilter.ALL,
-                                onClick = { selectedStatusFilter = KidTaskStatusFilter.ALL },
-                                label = { Text("Todas (${childAssignedTasks.size})") },
-                                modifier = Modifier.testTag("status_filter_all")
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = selectedStatusFilter == KidTaskStatusFilter.TO_DO,
-                                onClick = { selectedStatusFilter = KidTaskStatusFilter.TO_DO },
-                                label = { Text("A Fazer 📋 ($todoCount)") },
-                                modifier = Modifier.testTag("status_filter_todo")
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = selectedStatusFilter == KidTaskStatusFilter.PENDING,
-                                onClick = { selectedStatusFilter = KidTaskStatusFilter.PENDING },
-                                label = { Text("Pendentes 🕐 ($pendingCount)") },
-                                modifier = Modifier.testTag("status_filter_pending")
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = selectedStatusFilter == KidTaskStatusFilter.DONE,
-                                onClick = { selectedStatusFilter = KidTaskStatusFilter.DONE },
-                                label = { Text("Concluídas ✅ ($doneCount)") },
-                                modifier = Modifier.testTag("status_filter_done")
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = selectedStatusFilter == KidTaskStatusFilter.REJECTED,
-                                onClick = { selectedStatusFilter = KidTaskStatusFilter.REJECTED },
-                                label = { Text("Recusadas ❌ ($rejectedCount)") },
-                                modifier = Modifier.testTag("status_filter_rejected")
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Filtro por Cômodo
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Filtrar por Cômodo:",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
-                    )
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        item {
-                            FilterChip(
-                                selected = selectedRoom == null,
-                                onClick = { selectedRoom = null },
-                                label = { Text("Todos os cômodos") },
-                                modifier = Modifier.testTag("room_filter_all")
-                            )
-                        }
-                        items(RoomCategory.values()) { room ->
-                            FilterChip(
-                                selected = selectedRoom == room,
-                                onClick = {
-                                    selectedRoom = if (selectedRoom == room) null else room
-                                },
-                                label = { Text(room.labelWithEmoji) }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Task list
-            if (filteredTasks.isEmpty()) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Box(
+                        // Left Pane: Piggy Bank + Filters + Recent Redemptions
+                        LazyColumn(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(28.dp),
-                            contentAlignment = Alignment.Center
+                                .weight(0.4f)
+                                .fillMaxHeight(),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = when (selectedStatusFilter) {
-                                        KidTaskStatusFilter.DONE -> "🎉"
-                                        KidTaskStatusFilter.PENDING -> "🕐"
-                                        KidTaskStatusFilter.REJECTED -> "✨"
-                                        else -> "🧹"
-                                    },
-                                    fontSize = 40.sp
-                                )
-                                Text(
-                                    text = when (selectedStatusFilter) {
-                                        KidTaskStatusFilter.DONE -> "Nenhuma tarefa concluída neste filtro."
-                                        KidTaskStatusFilter.PENDING -> "Nenhuma tarefa pendente de aprovação."
-                                        KidTaskStatusFilter.REJECTED -> "Nenhuma tarefa recusada pelos pais. Muito bem!"
-                                        KidTaskStatusFilter.TO_DO -> "Tudo pronto! Não há tarefas pendentes para fazer."
-                                        else -> "Nenhuma tarefa disponível com os filtros atuais."
-                                    },
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium
+                            item {
+                                KidPiggyCard(
+                                    balance = balance,
+                                    onRedeemClick = { showRedeemDialog = true }
                                 )
                             }
+
+                            item {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        text = "Filtrar por Status:",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp
+                                    )
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        KidStatusFilterChips(
+                                            selectedStatusFilter = selectedStatusFilter,
+                                            totalCount = childAssignedTasks.size,
+                                            todoCount = todoCount,
+                                            pendingCount = pendingCount,
+                                            doneCount = doneCount,
+                                            rejectedCount = rejectedCount,
+                                            onSelect = { selectedStatusFilter = it }
+                                        )
+                                    }
+                                }
+                            }
+
+                            item {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        text = "Filtrar por Cômodo:",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp
+                                    )
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        FilterChip(
+                                            selected = selectedRoom == null,
+                                            onClick = { selectedRoom = null },
+                                            label = { Text("Todos os cômodos") },
+                                            modifier = Modifier.testTag("room_filter_all")
+                                        )
+                                        RoomCategory.values().forEach { room ->
+                                            FilterChip(
+                                                selected = selectedRoom == room,
+                                                onClick = {
+                                                    selectedRoom = if (selectedRoom == room) null else room
+                                                },
+                                                label = { Text(room.labelWithEmoji) }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (redemptions.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = "🎁 Minhas solicitações de recompensa",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp
+                                    )
+                                }
+                                items(redemptions.take(5), key = { "redemption_${it.id}" }) { red ->
+                                    KidRedemptionCard(red = red)
+                                }
+                            }
+
+                            item { Spacer(modifier = Modifier.height(16.dp)) }
+                        }
+
+                        // Right Pane: Tasks List/Grid
+                        val rightPaneColumns = if (adaptive.maxWidth >= 1100.dp) 2 else 1
+                        val taskRows = remember(filteredTasks, rightPaneColumns) {
+                            filteredTasks.chunked(rightPaneColumns)
+                        }
+
+                        LazyColumn(
+                            modifier = Modifier
+                                .weight(0.6f)
+                                .fillMaxHeight(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            if (filteredTasks.isEmpty()) {
+                                item {
+                                    EmptyKidTasksCard(selectedStatusFilter = selectedStatusFilter)
+                                }
+                            } else {
+                                items(
+                                    items = taskRows,
+                                    key = { row -> "row_" + row.joinToString("_") { "task_${it.id}" } }
+                                ) { rowTasks ->
+                                    ResponsiveGridRow(
+                                        items = rowTasks,
+                                        columns = rightPaneColumns,
+                                        horizontalSpacing = 12.dp
+                                    ) { task ->
+                                        val latestComp = latestCompletionByTaskId[task.id]
+                                        KidTaskCard(
+                                            task = task,
+                                            latestCompletion = latestComp,
+                                            onComplete = { onCompleteTask(task) },
+                                            onUndo = { compId -> onUndoCompletion(compId) }
+                                        )
+                                    }
+                                }
+                            }
+                            item { Spacer(modifier = Modifier.height(24.dp)) }
                         }
                     }
                 }
             } else {
-                items(filteredTasks, key = { "task_${it.id}" }) { task ->
-                    val latestComp = latestCompletionByTaskId[task.id]
-                    KidTaskCard(
-                        task = task,
-                        childId = child.id,
-                        latestCompletion = latestComp,
-                        onComplete = { onCompleteTask(task) },
-                        onUndo = { compId -> onUndoCompletion(compId) }
-                    )
-                }
-            }
+                // Single scrollable LazyColumn for Compact & Medium screens
+                val columns = adaptive.twoOrOneColumns
+                val taskRows = remember(filteredTasks, columns) { filteredTasks.chunked(columns) }
 
-            // Recent Redemptions / Requests Section
-            if (redemptions.isNotEmpty()) {
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "🎁 Minhas solicitações de recompensa",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                }
-
-                items(redemptions.take(5), key = { "redemption_${it.id}" }) { red ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .widthIn(max = adaptive.contentMaxWidth),
+                        contentPadding = PaddingValues(horizontal = adaptive.horizontalPadding, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
+                        item {
+                            KidPiggyCard(
+                                balance = balance,
+                                onRedeemClick = { showRedeemDialog = true }
+                            )
+                        }
+
+                        item {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(
-                                    text = red.title,
+                                    text = "Filtrar por Status:",
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp
+                                    fontSize = 14.sp
                                 )
-                                Text(
-                                    text = "Valor: ${red.formattedCost} • ${red.formattedDate}",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = when (red.status) {
-                                    CompletionStatus.APPROVED -> SucessoVerdeContainer
-                                    CompletionStatus.REJECTED -> Color(0xFFFEE2E2)
-                                    else -> DestaqueAlertaContainer
-                                }
-                            ) {
-                                Text(
-                                    text = red.status.fullLabel,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = when (red.status) {
-                                        CompletionStatus.APPROVED -> Color(0xFF065F46)
-                                        CompletionStatus.REJECTED -> Color(0xFF991B1B)
-                                        else -> Color(0xFF92400E)
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    item {
+                                        FilterChip(
+                                            selected = selectedStatusFilter == KidTaskStatusFilter.ALL,
+                                            onClick = { selectedStatusFilter = KidTaskStatusFilter.ALL },
+                                            label = { Text("Todas (${childAssignedTasks.size})") },
+                                            modifier = Modifier.testTag("status_filter_all")
+                                        )
                                     }
+                                    item {
+                                        FilterChip(
+                                            selected = selectedStatusFilter == KidTaskStatusFilter.TO_DO,
+                                            onClick = { selectedStatusFilter = KidTaskStatusFilter.TO_DO },
+                                            label = { Text("A Fazer 📋 ($todoCount)") },
+                                            modifier = Modifier.testTag("status_filter_todo")
+                                        )
+                                    }
+                                    item {
+                                        FilterChip(
+                                            selected = selectedStatusFilter == KidTaskStatusFilter.PENDING,
+                                            onClick = { selectedStatusFilter = KidTaskStatusFilter.PENDING },
+                                            label = { Text("Pendentes 🕐 ($pendingCount)") },
+                                            modifier = Modifier.testTag("status_filter_pending")
+                                        )
+                                    }
+                                    item {
+                                        FilterChip(
+                                            selected = selectedStatusFilter == KidTaskStatusFilter.DONE,
+                                            onClick = { selectedStatusFilter = KidTaskStatusFilter.DONE },
+                                            label = { Text("Concluídas ✅ ($doneCount)") },
+                                            modifier = Modifier.testTag("status_filter_done")
+                                        )
+                                    }
+                                    item {
+                                        FilterChip(
+                                            selected = selectedStatusFilter == KidTaskStatusFilter.REJECTED,
+                                            onClick = { selectedStatusFilter = KidTaskStatusFilter.REJECTED },
+                                            label = { Text("Recusadas ❌ ($rejectedCount)") },
+                                            modifier = Modifier.testTag("status_filter_rejected")
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        item {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "Filtrar por Cômodo:",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                )
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    item {
+                                        FilterChip(
+                                            selected = selectedRoom == null,
+                                            onClick = { selectedRoom = null },
+                                            label = { Text("Todos os cômodos") },
+                                            modifier = Modifier.testTag("room_filter_all")
+                                        )
+                                    }
+                                    items(RoomCategory.values()) { room ->
+                                        FilterChip(
+                                            selected = selectedRoom == room,
+                                            onClick = {
+                                                selectedRoom = if (selectedRoom == room) null else room
+                                            },
+                                            label = { Text(room.labelWithEmoji) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (filteredTasks.isEmpty()) {
+                            item {
+                                EmptyKidTasksCard(selectedStatusFilter = selectedStatusFilter)
+                            }
+                        } else {
+                            items(
+                                items = taskRows,
+                                key = { row -> row.joinToString("_") { "task_${it.id}" } }
+                            ) { rowTasks ->
+                                ResponsiveGridRow(
+                                    items = rowTasks,
+                                    columns = columns,
+                                    horizontalSpacing = 12.dp
+                                ) { task ->
+                                    val latestComp = latestCompletionByTaskId[task.id]
+                                    KidTaskCard(
+                                        task = task,
+                                        latestCompletion = latestComp,
+                                        onComplete = { onCompleteTask(task) },
+                                        onUndo = { compId -> onUndoCompletion(compId) }
+                                    )
+                                }
+                            }
+                        }
+
+                        if (redemptions.isNotEmpty()) {
+                            item {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "🎁 Minhas solicitações de recompensa",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
                                 )
                             }
+
+                            items(redemptions.take(5), key = { "redemption_${it.id}" }) { red ->
+                                KidRedemptionCard(red = red)
+                            }
+                        }
+
+                        item {
+                            Spacer(modifier = Modifier.height(24.dp))
                         }
                     }
                 }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
@@ -366,6 +444,146 @@ fun KidsDashboardScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun KidStatusFilterChips(
+    selectedStatusFilter: KidTaskStatusFilter,
+    totalCount: Int,
+    todoCount: Int,
+    pendingCount: Int,
+    doneCount: Int,
+    rejectedCount: Int,
+    onSelect: (KidTaskStatusFilter) -> Unit
+) {
+    FilterChip(
+        selected = selectedStatusFilter == KidTaskStatusFilter.ALL,
+        onClick = { onSelect(KidTaskStatusFilter.ALL) },
+        label = { Text("Todas ($totalCount)") },
+        modifier = Modifier.testTag("status_filter_all")
+    )
+    FilterChip(
+        selected = selectedStatusFilter == KidTaskStatusFilter.TO_DO,
+        onClick = { onSelect(KidTaskStatusFilter.TO_DO) },
+        label = { Text("A Fazer 📋 ($todoCount)") },
+        modifier = Modifier.testTag("status_filter_todo")
+    )
+    FilterChip(
+        selected = selectedStatusFilter == KidTaskStatusFilter.PENDING,
+        onClick = { onSelect(KidTaskStatusFilter.PENDING) },
+        label = { Text("Pendentes 🕐 ($pendingCount)") },
+        modifier = Modifier.testTag("status_filter_pending")
+    )
+    FilterChip(
+        selected = selectedStatusFilter == KidTaskStatusFilter.DONE,
+        onClick = { onSelect(KidTaskStatusFilter.DONE) },
+        label = { Text("Concluídas ✅ ($doneCount)") },
+        modifier = Modifier.testTag("status_filter_done")
+    )
+    FilterChip(
+        selected = selectedStatusFilter == KidTaskStatusFilter.REJECTED,
+        onClick = { onSelect(KidTaskStatusFilter.REJECTED) },
+        label = { Text("Recusadas ❌ ($rejectedCount)") },
+        modifier = Modifier.testTag("status_filter_rejected")
+    )
+}
+
+@Composable
+private fun EmptyKidTasksCard(selectedStatusFilter: KidTaskStatusFilter) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(28.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = when (selectedStatusFilter) {
+                        KidTaskStatusFilter.DONE -> "🎉"
+                        KidTaskStatusFilter.PENDING -> "🕐"
+                        KidTaskStatusFilter.REJECTED -> "✨"
+                        else -> "🧹"
+                    },
+                    fontSize = 40.sp
+                )
+                Text(
+                    text = when (selectedStatusFilter) {
+                        KidTaskStatusFilter.DONE -> "Nenhuma tarefa concluída neste filtro."
+                        KidTaskStatusFilter.PENDING -> "Nenhuma tarefa pendente de aprovação."
+                        KidTaskStatusFilter.REJECTED -> "Nenhuma tarefa recusada pelos pais. Muito bem!"
+                        KidTaskStatusFilter.TO_DO -> "Tudo pronto! Não há tarefas pendentes para fazer."
+                        else -> "Nenhuma tarefa disponível com os filtros atuais."
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun KidRedemptionCard(red: RewardRedemption) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
+            ) {
+                Text(
+                    text = red.title,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp
+                )
+                Text(
+                    text = "Valor: ${red.formattedCost} • ${red.formattedDate}",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = when (red.status) {
+                    CompletionStatus.APPROVED -> SucessoVerdeContainer
+                    CompletionStatus.REJECTED -> Color(0xFFFEE2E2)
+                    else -> DestaqueAlertaContainer
+                }
+            ) {
+                Text(
+                    text = red.status.fullLabel,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = when (red.status) {
+                        CompletionStatus.APPROVED -> Color(0xFF065F46)
+                        CompletionStatus.REJECTED -> Color(0xFF991B1B)
+                        else -> Color(0xFF92400E)
+                    }
+                )
+            }
+        }
     }
 }
 
@@ -398,7 +616,11 @@ private fun KidPiggyCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    ) {
                         Text(
                             text = "🪙 Meu Cofrinho",
                             color = Color.White.copy(alpha = 0.9f),
@@ -425,7 +647,9 @@ private fun KidPiggyCard(
                             contentColor = Color(0xFF78350F)
                         ),
                         shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.testTag("redeem_reward_button"),
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 48.dp)
+                            .testTag("redeem_reward_button"),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                     ) {
                         Icon(
@@ -462,7 +686,7 @@ private fun KidPiggyCard(
                         )
                     }
 
-                    Column {
+                    Column(horizontalAlignment = Alignment.End) {
                         Text(
                             text = "Ganho no Mês",
                             color = Color.White.copy(alpha = 0.85f),
@@ -484,14 +708,12 @@ private fun KidPiggyCard(
 @Composable
 private fun KidTaskCard(
     task: TaskItem,
-    childId: Long,
     latestCompletion: TaskCompletion?,
     onComplete: () -> Unit,
     onUndo: (Long) -> Unit
 ) {
     val currentStatus = latestCompletion?.status
 
-    // Estilo de borda de acordo com o status
     val borderColor = when (currentStatus) {
         CompletionStatus.APPROVED -> SucessoVerdeAgua.copy(alpha = 0.5f)
         CompletionStatus.PENDING -> DestaqueAlertaAmarelo.copy(alpha = 0.6f)
@@ -518,7 +740,6 @@ private fun KidTaskCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Linha Superior: Ícone, Título, Cômodo e Recompensa
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -539,24 +760,19 @@ private fun KidTaskCard(
                         Text(text = task.roomCategory.emoji, fontSize = 24.sp)
                     }
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = task.title,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = task.room,
-                                fontSize = 12.sp,
-                                color = LinkTextoClicavel,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
+                        Text(
+                            text = task.room,
+                            fontSize = 12.sp,
+                            color = LinkTextoClicavel,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
 
@@ -584,10 +800,8 @@ private fun KidTaskCard(
                 )
             }
 
-            // Exibição explícita dos status: Concluído, Pendente, Recusado ou A Fazer
             when (currentStatus) {
                 CompletionStatus.APPROVED -> {
-                    // STATUS: CONCLUÍDO (Aprovado)
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = SucessoVerdeContainer,
@@ -626,7 +840,6 @@ private fun KidTaskCard(
                 }
 
                 CompletionStatus.PENDING -> {
-                    // STATUS: PENDENTE (Aguardando aprovação)
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = DestaqueAlertaContainer,
@@ -644,6 +857,7 @@ private fun KidTaskCard(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(
+                                    modifier = Modifier.weight(1f),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
@@ -664,7 +878,9 @@ private fun KidTaskCard(
                                 TextButton(
                                     onClick = { onUndo(latestCompletion.id) },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                    modifier = Modifier.testTag("undo_task_${task.id}")
+                                    modifier = Modifier
+                                        .defaultMinSize(minHeight = 48.dp)
+                                        .testTag("undo_task_${task.id}")
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Undo,
@@ -692,7 +908,6 @@ private fun KidTaskCard(
                 }
 
                 CompletionStatus.REJECTED -> {
-                    // STATUS: RECUSADO (Recusado pelos pais)
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = Color(0xFFFEE2E2),
@@ -734,7 +949,7 @@ private fun KidTaskCard(
                                 colors = ButtonDefaults.buttonColors(containerColor = BotaoPrimarioAzul),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(42.dp)
+                                    .defaultMinSize(minHeight = 48.dp)
                                     .testTag("retry_task_${task.id}")
                             ) {
                                 Icon(
@@ -754,7 +969,6 @@ private fun KidTaskCard(
                 }
 
                 null -> {
-                    // STATUS: A FAZER (Ainda não realizada)
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
@@ -784,7 +998,7 @@ private fun KidTaskCard(
                             onClick = onComplete,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
+                                .defaultMinSize(minHeight = 48.dp)
                                 .testTag("complete_task_${task.id}"),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = BotaoPrimarioAzul
@@ -823,6 +1037,12 @@ fun RedemptionRequestDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .widthIn(max = 460.dp)
+            .imePadding(),
         title = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -835,7 +1055,9 @@ fun RedemptionRequestDialog(
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
             ) {
                 Surface(
                     shape = RoundedCornerShape(10.dp),
@@ -853,7 +1075,10 @@ fun RedemptionRequestDialog(
 
                 OutlinedTextField(
                     value = title,
-                    onValueChange = { title = it },
+                    onValueChange = {
+                        title = it
+                        errorMessage = null
+                    },
                     label = { Text("O que você gostaria de pedir?") },
                     placeholder = { Text("Ex: Sorvete, gibi, tempo extra...") },
                     modifier = Modifier
@@ -865,7 +1090,10 @@ fun RedemptionRequestDialog(
 
                 OutlinedTextField(
                     value = costText,
-                    onValueChange = { costText = it.filter { c -> c.isDigit() || c == ',' || c == '.' } },
+                    onValueChange = {
+                        costText = it.filter { c -> c.isDigit() || c == ',' || c == '.' }
+                        errorMessage = null
+                    },
                     label = { Text("Quanto do seu saldo usar? (R$)") },
                     placeholder = { Text("Ex: 5,00") },
                     modifier = Modifier
@@ -910,15 +1138,21 @@ fun RedemptionRequestDialog(
                     onConfirm(title.trim(), costCents)
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = BotaoPrimarioAzul),
-                modifier = Modifier.testTag("redeem_dialog_confirm")
+                modifier = Modifier
+                    .defaultMinSize(minHeight = 48.dp)
+                    .testTag("redeem_dialog_confirm")
             ) {
                 Text("Pedir aos Pais")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+            ) {
                 Text("Cancelar")
             }
-        }
+        },
+        shape = RoundedCornerShape(20.dp)
     )
 }
